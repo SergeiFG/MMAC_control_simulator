@@ -39,16 +39,21 @@ class ControlSystem(FunctionalBlock):
         self.logger.info(f"Начинаем цикл работы системы управления {self.name}")
         self.logger.debug(f"Период симуляции системы управления {tick_duration}")
 
+        # Бэкап эстиматоров пока сломан, сейчас не понадобится, временно отключает
+        # TODO: Исправить бэкап эстиматоров. Встроить его в логику, чтобы не ломались вычисления и сохранялась история
+        # self.supervisor.revert_estimators()
+        # self.supervisor.revert_controllers()
+
         self.logger.info(f"Начинаем работу с банком эстиматоров системы управления {self.name}")
-        self.supervisor.compute_estimators(tick_duration=tick_duration, save_backup=True, **kwargs)
+        self.supervisor.compute_estimators(tick_duration=tick_duration, save_backup=False, **kwargs)
         self.supervisor.chose_estimator()
-        self.supervisor.revert_estimators()
+
         self.logger.info(f"Итоговый эстиматор {self.supervisor.current_estimator}")
 
         self.logger.info(f"Начинаем работу с банком контроллеров системы управления {self.name}")
-        self.supervisor.compute_controllers(tick_duration=tick_duration, save_backup=True, **kwargs)
+        self.supervisor.compute_controllers(tick_duration=tick_duration, save_backup=False, **kwargs)
         self.supervisor.choose_controller()
-        self.supervisor.revert_controllers()
+
         self.logger.info(f"Итоговый контроллер {self.supervisor.current_controller}")
 
         self.logger.info(f"Начинаем вычисление управляющих воздействий {self.name}")
@@ -60,6 +65,9 @@ class ControlSystem(FunctionalBlock):
     def read_control_actions(self):
         return self.control_actions
 
+    def read_sensors(self,  keys: list[str] = None) -> dict[str, Number]:
+        return self.control_actions
+
     def load_sensor_data(self, data: dict[str, Number]) -> None:
         self.logger.info(f"Загружаем данные с сенсоров в систему управления {self.name}")
         self.logger.debug(f"Данные с сенсоров {data}")
@@ -67,3 +75,8 @@ class ControlSystem(FunctionalBlock):
         self.supervisor.estimator_bank.load_variables(data=data)
         self.supervisor.controller_bank.load_variables(data=data)
 
+    def get_state(self,  keys: list[str] = None) -> dict[str, Number | str]:
+        res = super().get_state(keys=keys)
+        res['current_controller'] = self.supervisor.current_controller
+        res['current_estimator'] = self.supervisor.current_estimator
+        return res

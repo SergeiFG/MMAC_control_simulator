@@ -252,7 +252,7 @@ class ParameterSet:
             if isinstance(p, DerivedParameter):
                 p.build_symbolic()
 
-    def __getitem__(self, key) -> Number:
+    def __getitem__(self, key) -> Parameter:
         return self._params[key]
 
     def __setitem__(self, key, value) -> None:
@@ -332,3 +332,6 @@ if __name__ == '__main__':
     print(model.parameters.as_dict(['y3'], read_sensors=True))
 
     print(model.parameters.as_dict().keys())
+
+    b = model.parameters['x1']
+    print(b)
