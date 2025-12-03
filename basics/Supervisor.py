@@ -42,10 +42,10 @@ class Supervisor:
         self.estimators_backup = None
         self.controllers_backup = None
 
-    def choose_controller(self) -> str:
+    def choose_controller(self) -> None:
         raise NotImplementedError
 
-    def chose_estimator(self) -> str:
+    def chose_estimator(self) -> None:
         raise NotImplementedError
 
     def compute_estimators(self,

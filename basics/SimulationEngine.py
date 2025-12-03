@@ -1,7 +1,7 @@
 import logging, os
 import warnings
 
-from basics import FunctionalBlock, ControlSystem
+from basics import FunctionalBlock, ControlSystem, Historizer
 from datetime import datetime
 
 
@@ -18,7 +18,7 @@ class SimulationEngine:
                  name: str = 'Test',
                  model: FunctionalBlock = None,
                  control_system: ControlSystem = None,
-                 historizer: object = None,
+                 historizer: Historizer = None,
                  tick_duration: float = 0.1,
                  logger: logging.Logger | None = None,
                  *args,
@@ -53,21 +53,23 @@ class SimulationEngine:
             raise AttributeError("Модель объекта управления не задана")
         else:
             self.model = model
-            self.logger.debug("Модель инициализирована")
+            self.logger.info("Модель инициализирована")
 
         if control_system is None:
             self.logger.error("Система управления не задана")
             raise AttributeError("Система управления не задана")
         else:
             self.control_system = control_system
-            self.logger.debug("Система управления инициализирована")
+            self.logger.info("Система управления инициализирована")
 
         if historizer is None:
             self.logger.error("Система сбора данных не задана")
             raise AttributeError("Система сбора данных не задана")
         else:
             self.historizer = historizer
-            self.logger.debug("Система сбора данных инициализирована")
+            self.logger.info("Система сбора данных инициализирована")
+            self.historizer.create_folder(self.name)
+            self.logger.debug(f"Создана папка хранения истории {self.historizer.dir}")
 
         try:
             assert float(tick_duration) > 0
@@ -123,26 +125,32 @@ class SimulationEngine:
         self.logger.debug(f"Собираем управляющие воздействия для момента времени {self.time}")
         control_actions = self.control_system.read_control_actions()
 
+        self.model.load_variables(control_actions)
+
         # Получаем реальное состояние модели и системы управления
         self.logger.debug(f"Собираем реальное состояние физ. системы для момента времени {self.time}")
         model_state = self.model.get_state()
         self.logger.debug(f"Собираем реальное состояние системы управления для момента времени {self.time}")
         control_system_state = self.control_system.get_state()
+        controllers_state = self.control_system.supervisor.controller_bank.get_state()
+        estimators_state = self.control_system.supervisor.estimator_bank.get_state()
 
         # Записываем текущее состояние системы в модуль ведения истории
         self.logger.debug(f"Записываем историю для момента времени {self.time}")
-        self.historizer.record(self.time, sensor_data, control_actions, model_state, control_system_state)
+        self.historizer.record(self.time, model_sensor_data=sensor_data, control_actions=control_actions,
+                               model_state=model_state, control_system_state=control_system_state,
+                               **controllers_state, **estimators_state)
 
         # Записываем управляющие воздействия в модель, делаем шаг симуляции
         self.logger.debug(f"Запускам шаг симуляции модели для момента времени {self.time}")
-        self.model.load_variables(control_actions)
+
         self.model.compute(self.tick_duration)
 
         # Двигаем время
         self.time += self.tick_duration
 
     def set_logging(self, logger) -> None:
-        # Базовая папка для логов и истории
+        # Базовая папка для логов
         base_log_dir = "logs"
         # Подпапка с текущей датой и временем запуска
         run_dir = f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")} Simulation for {self.name}'

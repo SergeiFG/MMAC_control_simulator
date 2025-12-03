@@ -125,7 +125,7 @@ class FunctionalBlockBank:
 
         return res
 
-    def get_state(self, keys: list[str] = None, names: list[str] | None = None) -> dict[str, dict[str, Number]]:
+    def get_state(self, keys: list[str] = None, names: list[str] | None = None) -> dict[str, dict[str, Number | str]]:
         """
         get_state
         ---

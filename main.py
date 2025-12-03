@@ -1,6 +1,6 @@
-from SimulationEngine import SimulationEngine
+from basics import SimulationEngine, Historizer
 import logging
-from logger import ColoredFormatter
+from basics import ColoredFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +16,17 @@ console_handler.setLevel(logging.DEBUG)
 # Закомментировать строку, если не нужно вообще выводить в консоль
 logger.addHandler(console_handler)
 
+# Создать объект для записи истории
+historizer = Historizer()
 # Создание симуляции
 test = SimulationEngine(
     name='Test',
     model=0,
     control_system=0,
-    historizer=0,
+    historizer=historizer,
     tick_duration=1,
     logger=logger
 )
 
+historizer.save_history()
 

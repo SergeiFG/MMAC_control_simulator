@@ -84,7 +84,7 @@ class FunctionalBlock:
 
         return res
 
-    def get_state(self,  keys: list[str] = None) -> dict[str, Number]:
+    def get_state(self,  keys: list[str] = None) -> dict[str, Number | str]:
         """
         get_state
         ---
@@ -116,7 +116,7 @@ class FunctionalBlock:
         Аргументы:
             d: dict[str, Number]      - Словарь с переменными и их значениями для загрузки
         """
-        self.logger.info(f'Начато обновление параметров физической модели')
+        self.logger.info(f'Начато обновление параметров функционального блока {self.name}')
         self.logger.debug(f'Для обновления использованы значения {data}')
         self.parameters.load_dict(data)
         self.parameters.update_derived()
