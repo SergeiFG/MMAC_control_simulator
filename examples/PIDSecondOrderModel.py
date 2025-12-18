@@ -4,6 +4,9 @@ from numbers import Number
 
 class PIDSecondOrderPlantModel(FunctionalBlock):
     """
+    Украл в интернете модель второго порядка с вязким демпфированием, жесткостью и сухим трением.
+
+    
     Second-order plant with viscous damping, stiffness and dry friction.
     y: position, v: velocity, u: control input.
     Equation:
@@ -12,7 +15,7 @@ class PIDSecondOrderPlantModel(FunctionalBlock):
     """
 
     def compute(self, tick_duration: Number = None) -> None:
-        
+
         y = self.parameters["y"].value
         v = self.parameters["v"].value
         u = self.parameters["u"].value

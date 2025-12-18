@@ -14,7 +14,6 @@ pid_estimator_parameters = ParameterSet(
 
 
 class PIDTankEstimator(FunctionalBlock):
-    """Heuristic, data-driven selector for three PID controllers on the tank."""
 
     def compute(self, tick_duration: Number = None) -> None:
         if tick_duration is None or tick_duration == 0:

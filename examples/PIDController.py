@@ -4,8 +4,6 @@ from numbers import Number
 
 class PIDController(FunctionalBlock):
     def compute(self, tick_duration: Number = None) -> None:
-        if tick_duration is None:
-            raise ValueError("tick_duration is required for PIDController.compute")
 
         error = self.parameters["setpoint"].value - self.parameters["y"].value
         integral = self.parameters["integral"].value + error * tick_duration
