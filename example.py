@@ -60,7 +60,9 @@ Simulation = SimulationEngine(
     control_system=control_system,
     historizer=historizer,
     tick_duration=1,
-    logger=logger
+    logger=logger,
+    logs_subfolder=None,
+    results_subfolder=None
 )
 
 # Запускаем симуляцию
