@@ -3,7 +3,7 @@ import logging
 from basics import ColoredFormatter
 import copy
 
-from examples import ExampleController, ExampleEstimator, ExampleSupervisor, ExampleModel
+from examples.example import ExampleModel, ExampleController, ExampleSupervisor, ExampleEstimator
 
 logger = logging.getLogger(__name__)
 

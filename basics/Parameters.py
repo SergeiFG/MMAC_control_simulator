@@ -2,6 +2,7 @@ import sympy as sp
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Union
 from numbers import Number
+from collections import deque
 
 
 @dataclass
@@ -36,6 +37,9 @@ class Parameter:
     max_value: Optional[float] = None
     dtype: Optional[type] = None  # тип данных (float, int, bool, str, np.ndarray)
 
+    previous_value_depth: Optional[int] = 2
+    previous_values = None
+
     sensor_noise: Optional[Callable[[Number], Number]] = None  # Функция для добавления шума, ограничений и нелинейности измерения параметра
 
     metadata: dict[str, Any] = field(default_factory=dict)  # произвольные метаданные
@@ -46,8 +50,15 @@ class Parameter:
         ---
         Метод для автоматического применения типа данных при изменении значения
         """
-        if name == "value" and self.dtype is not None:
-            value = self.dtype(value)
+        if name == "value":
+            if self.dtype is not None:
+                value = self.dtype(value)
+            if isinstance(value, Number):
+                if self.previous_values is None:
+                    self.previous_values = deque([], maxlen=self.previous_value_depth + 1)
+                self.previous_values.appendleft(value)
+        elif name == "previous_value_depth" and self.previous_values is not None:
+            self.previous_values = deque(list(self.previous_values), maxlen=self.previous_value_depth+1)
         super().__setattr__(name, value)
 
     def validate(self) -> None: # TODO: Подумать, может стоит разделить логику обрезания значения и невозможных значений
@@ -78,8 +89,8 @@ class Parameter:
     def __str__(self):
         return f"{self.name} = {self.value} {self.units}"
 
-    def __repr__(self):
-        return f"{self.name}={self.value}"
+    def __call__(self):
+        return self.value
 
 
 class DerivedParameter(Parameter):
@@ -106,7 +117,7 @@ class DerivedParameter(Parameter):
     self._symbolic_expr                                     - Символьное выражение для вычисляемого параметра
 
     """
-    def __init__(self, name: str, formula: Callable[[Any], Number], dependencies: list[str], **kwargs):
+    def __init__(self, name: str, formula: Callable[[Any], Number], dependencies: list[str], **kwargs) -> None:
         """
         __init__
         ---
@@ -119,7 +130,7 @@ class DerivedParameter(Parameter):
         self.dependencies = dependencies
         self._symbolic_expr = None  # символьное выражение будет создано позже
 
-    def build_symbolic(self):
+    def build_symbolic(self) -> None:
         """Создаёт символьное выражение из зависимости"""
         symbols = [sp.Symbol(dep) for dep in self.dependencies]
         expr = self.formula_func(*symbols)
@@ -129,9 +140,9 @@ class DerivedParameter(Parameter):
             self._symbolic_expr = None
         return
 
-    def compute(self, parameters: "ParameterSet"):
+    def compute(self, parameters: "ParameterSet") -> Number:
         """Численный расчёт значения"""
-        values = [parameters[d].value for d in self.dependencies]
+        values = [parameters[d] for d in self.dependencies]
         self.value = self.formula_func(*values)
         return self.value
 
@@ -147,7 +158,7 @@ class ParameterSet:
     Класс для связи и управления набором параметров
 
     """
-    def __init__(self, **params: Parameter | DerivedParameter):
+    def __init__(self, **params: Parameter | DerivedParameter) -> None:
         """
         __init__
         ---
@@ -159,12 +170,13 @@ class ParameterSet:
             **params: Parameter     - Набор именованных параметров (класс Parameter или DerivedParameter)
         """
         self._params = params
+        self.params_dict = params # TODO: может есть более оптимальный вариант
 
         self._build_dependency_graph()
         self._check_for_cycles()
         self.order = self._topological_sort()
         self.update_derived()
-        self._build_symbolic_expressions() # TODO: понять, нужно ли, может ломать некоторые функции
+        self._build_symbolic_expressions() # Пока при ошибке ничего не делаем
 
         # Перенесено в self.update_derived()
         # for key in self._params: # При вводе значений проверим, что все числа корректные
@@ -252,8 +264,8 @@ class ParameterSet:
             if isinstance(p, DerivedParameter):
                 p.build_symbolic()
 
-    def __getitem__(self, key) -> Parameter:
-        return self._params[key]
+    def __getitem__(self, key) -> Number:
+        return self._params[key].value
 
     def __setitem__(self, key, value) -> None:
         """Проверка данных при изменении любого из параметов"""
@@ -307,31 +319,26 @@ class ParameterSet:
 
 
 if __name__ == '__main__':
-    class Model:
-        def __init__(self):
-            self.parameters = ParameterSet(
-                x1 = Parameter("x1", 4, sensor=True, max_value=5),
-                x2 = Parameter("x2", 5, sensor=True),
-                y1 = DerivedParameter("y1", lambda x1, x2: x1**2+x2, ["x1","x2"], units='m2'),
-                y2=DerivedParameter("y2", lambda x: x*2, ["y3"]),
-                y3 = DerivedParameter("y3", lambda x: x * 2, ["y1"], sensor=True, sensor_noise=lambda x:x+1)
-                )
+    parameters = ParameterSet(
+        x1=Parameter("x1", 4, sensor=True, max_value=5),
+        x2=Parameter("x2", 5, sensor=True),
+        y1=DerivedParameter("y1", lambda x1, x2: x1 ** 2 + x2, ["x1", "x2"], units='m2', previous_value_depth=100),
+        y2=DerivedParameter("y2", lambda x: x * 2, ["y3"]),
+        y3=DerivedParameter("y3", lambda x: x * 2, ["y1"], sensor=True, sensor_noise=lambda x: x + 1)
+    )
+
+    print(parameters)
+    print(str(parameters["x1"]))
+    print(str(parameters.params_dict["x1"]))
+    print(parameters.params_dict["x1"].sensor)
+    print(parameters["y1"])
+    parameters["x1"] = 1
+    print(parameters)
+    parameters.update_derived()
+    print(parameters)
+    print(parameters.as_dict(read_sensors=True))
+    print(parameters.params_dict["x1"].previous_values)
+    print(parameters.params_dict["y1"].previous_values)
+    print(parameters.params_dict["y1"].previous_values[1])
 
 
-    model = Model()
-    # print(model.parameters)
-    # model.parameters["y1"] = 2
-    print(model.parameters.as_dict(['x2', 'y1']))
-    print(model.parameters.as_dict())
-
-    a = {'x1': 2, 'x2': 3}
-
-    model.parameters.load_dict(a)
-    model.parameters.update_derived()
-    print(model.parameters)
-    print(model.parameters.as_dict(['y3'], read_sensors=True))
-
-    print(model.parameters.as_dict().keys())
-
-    b = model.parameters['x1']
-    print(b)
