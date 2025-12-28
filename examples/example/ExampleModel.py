@@ -6,8 +6,8 @@ import random
 class ExampleModel(FunctionalBlock):
     def compute(self, tick_duration:Number = None) -> None:
         self.logger.debug(f"Уровень в модели до обновления {self.parameters['Level']}")
-        self.parameters['Level'] = self.parameters['Level'].value + self.parameters['Level_control'].value
-        self.parameters['Level'] = self.parameters['Level'].value + self.parameters['Level_delta'].value
+        self.parameters['Level'] = self.parameters['Level'] + self.parameters['Level_control']
+        self.parameters['Level'] = self.parameters['Level'] + self.parameters['Level_delta']
         self.logger.debug(f"Уровень в модели после обновления {self.parameters['Level']}")
 
 

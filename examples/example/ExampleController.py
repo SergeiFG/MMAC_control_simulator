@@ -5,15 +5,15 @@ import random
 
 class Controller(FunctionalBlock):
     def compute(self, tick_duration: Number = None) -> None:
-        level = self.parameters["Level"].value
-        if level <= self.parameters["Level_boundary"].value:
-            if self.parameters["Strength"].value > 0:
-                self.parameters['Level_control'] = self.parameters['Strength'].value
+        level = self.parameters["Level"]
+        if level <= self.parameters["Level_boundary"]:
+            if self.parameters["Strength"] > 0:
+                self.parameters['Level_control'] = self.parameters['Strength']
             else:
                 self.parameters['Level_control'] = 0
         else:
-            if self.parameters["Strength"].value < 0:
-                self.parameters['Level_control'] = self.parameters['Strength'].value
+            if self.parameters["Strength"] < 0:
+                self.parameters['Level_control'] = self.parameters['Strength']
             else:
                 self.parameters['Level_control'] = 0
 

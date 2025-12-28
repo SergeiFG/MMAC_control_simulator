@@ -6,8 +6,8 @@ import random
 class Estimator(FunctionalBlock):
     # В зависимости от значения уровня выдать контроллерам свои показатели качества
     def compute(self, tick_duration: Number = None) -> None:
-        level = self.parameters["Level"].value
-        if level <= self.parameters["Controller_boundary"].value:
+        level = self.parameters["Level"]
+        if level <= self.parameters["Controller_boundary"]:
             self.parameters['Controller_min'] = 1
             self.parameters['Controller_max'] = 0
         else:

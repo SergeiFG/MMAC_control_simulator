@@ -39,7 +39,7 @@ class FunctionalBlock:
         for key in self.parameters.as_dict().keys():
             if not isinstance(self.parameters[key], DerivedParameter):
                 self.variables.append(key)
-            if self.parameters[key].sensor is True:
+            if self.parameters.params_dict[key].sensor is True:
                 self.sensors.append(key)
 
         self.logger.debug(f"Сенсоры функционального блока {self.name}: {self.sensors}")
