@@ -209,6 +209,9 @@ class FunctionalBlockBank:
     def __getitem__(self, item) -> FunctionalBlock:
         return self._dict_model_set[item]
 
+    def get_names(self) -> list[str]:
+        return list(self._dict_model_set.keys())
+
 
 if __name__ == '__main__':
     from Parameters import Parameter, DerivedParameter, ParameterSet

@@ -1,4 +1,5 @@
 from basics import SimulationEngine, Historizer, FunctionalBlockBank, ControlSystem, ParameterSet
+from modules.supervisors import OneEstimatorSupervisor
 import logging
 from basics import ColoredFormatter
 import copy
@@ -39,17 +40,11 @@ max_controller_parameters["Level_boundary"] = 10
 max_controller_parameters["Strength"] = -4
 max_controller = ExampleController.Controller(logger=logger, parameters=max_controller_parameters, name="Controller_max")
 
-controller_bank = FunctionalBlockBank(logger=logger, model_set=[min_controller, max_controller], name="Controller bank")
-
 # Инициализировать эстиматор
-estimator_parameters = ExampleEstimator.estimator_parameters
-estimator_parameters["Controller_boundary"] = 5
-estimator = ExampleEstimator.Estimator(logger=logger, parameters=estimator_parameters, name="Estimator")
-
-estimator_bank = FunctionalBlockBank(logger=logger, model_set=[estimator], name="Estimator bank")
+estimator = ExampleEstimator.get_estimator(logger, boundary=5)
 
 # Инициализировать систему управления
-supervisor = ExampleSupervisor.ExampleSupervisor(logger=logger, controller_bank=controller_bank, estimator_bank=estimator_bank, name="Example supervisor")
+supervisor = OneEstimatorSupervisor(logger=logger, controllers=[min_controller, max_controller], estimators=[estimator], name="Example supervisor")
 
 control_system = ControlSystem(logger=logger, parameters=ParameterSet(), supervisor=supervisor, control_action_keys=["Level_control"], name="Example Control system")
 

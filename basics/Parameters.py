@@ -279,6 +279,12 @@ class ParameterSet:
         # Убрал автоматическое обновление, чтобы постоянно не пересчитывать, пока все параметры не заданы
         # self.update_derived()
 
+    def update(self, **additional_parameters: Parameter | DerivedParameter) -> None:
+        for new_param in additional_parameters:
+            self._params[new_param] = additional_parameters[new_param]
+            self.params_dict[new_param] = additional_parameters[new_param]
+
+
     def as_dict(self, keys: list[str] = None, read_sensors: bool = False) -> dict[str, Number]:
         """
         as_dict
@@ -323,13 +329,13 @@ if __name__ == '__main__':
         x1=Parameter("x1", 4, sensor=True, max_value=5),
         x2=Parameter("x2", 5, sensor=True),
         y1=DerivedParameter("y1", lambda x1, x2: x1 ** 2 + x2, ["x1", "x2"], units='m2', previous_value_depth=100),
-        y2=DerivedParameter("y2", lambda x: x * 2, ["y3"]),
+        y2=DerivedParameter("y2", lambda x: x * 2, ["y3"], sensor=False),
         y3=DerivedParameter("y3", lambda x: x * 2, ["y1"], sensor=True, sensor_noise=lambda x: x + 1)
     )
 
     print(parameters)
     print(str(parameters["x1"]))
-    print(str(parameters.params_dict["x1"]))
+    print(str(parameters.as_dict(["x1", "y1"])))
     print(parameters.params_dict["x1"].sensor)
     print(parameters["y1"])
     parameters["x1"] = 1
@@ -341,4 +347,15 @@ if __name__ == '__main__':
     print(parameters.params_dict["y1"].previous_values)
     print(parameters.params_dict["y1"].previous_values[1])
 
+    new_params = {'x5': Parameter("x5 new parameter", 18, sensor=True),
+                  'x1': Parameter("x1 new parameter", 558.35, sensor=False)}
+
+    # можно любой из вариантов update
+    parameters.update(**new_params)
+    # parameters.update(x5=Parameter("x5 new parameter", 18, sensor=True),
+    #               x10=Parameter("x10 new parameter", 558.35, sensor=False))
+
+    print(parameters)
+    print(parameters.as_dict(read_sensors=True))
+    print(parameters._params['x1'].sensor)
 

@@ -3,15 +3,15 @@ import logging
 from numbers import Number
 import copy
 
-from basics import FunctionalBlock, FunctionalBlockBank
+from basics import FunctionalBlock, FunctionalBlockBank, Estimator
 
 
 class Supervisor:
 
     def __init__(self, logger: logging.Logger,
                  name: str = "",
-                 controller_bank: FunctionalBlockBank = None,
-                 estimator_bank: FunctionalBlockBank = None,
+                 controllers: list[FunctionalBlock] = None,
+                 estimators: list[Estimator] = None,
                  *args,
                  **kwargs):
 
@@ -22,18 +22,23 @@ class Supervisor:
         self.name = name
 
         self.logger.info(f"Инициализация супервизора {name}")
-        self.logger.debug(f"Банк контроллеров: {controller_bank}")
-        self.logger.debug(f"Банк эстиматоров: {estimator_bank}")
+        self.logger.debug(f"Банк контроллеров: {controllers}")
+        self.logger.debug(f"Банк эстиматоров: {estimators}")
 
-        if controller_bank is None:
+        if controllers is None:
             self.logger.error(f"Не задан банк контроллеров для супервизора {self.name}")
         else:
-            self.controller_bank = controller_bank
+            # Загружаем банк контроллеров
+            self.controller_bank = FunctionalBlockBank(logger=logger, model_set=controllers, name="Controller bank")
 
-        if estimator_bank is None:
+        if estimators is None:
             self.logger.error(f"Не задан банк эстиматоров для супервизора {self.name}")
         else:
-            self.estimator_bank = estimator_bank
+            # Добавляем в каждый эстиматор инфо по контроллерам
+            for estimator in estimators:
+                estimator.update_controllers(self.controller_bank)
+            # Загружаем банк эстиматоров
+            self.estimator_bank = FunctionalBlockBank(logger=logger, model_set=estimators, name="Estimator bank")
 
         self.last_switch: Number = None  # TODO: Точно ли супервайзеру нужно это знать?
         self.current_controller: str = None

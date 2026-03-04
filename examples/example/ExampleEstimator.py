@@ -1,27 +1,20 @@
 from basics import FunctionalBlock, Parameter, ParameterSet
+from modules.estimators import RangeEstimator
 from numbers import Number
 import random
 
 
-class Estimator(FunctionalBlock):
-    # В зависимости от значения уровня выдать контроллерам свои показатели качества
-    def compute(self, tick_duration: Number = None) -> None:
-        level = self.parameters["Level"]
-        if level <= self.parameters["Controller_boundary"]:
-            self.parameters['Controller_min'] = 1
-            self.parameters['Controller_max'] = 0
-        else:
-            self.parameters['Controller_min'] = 0
-            self.parameters['Controller_max'] = 1
+# Функция для получения словаря с границами контроллеров
+def controller_boundaries(boundary):
+    return {
+        "Controller_min": {"Level": (None, boundary)},
+        "Controller_max": {"Level": (boundary, None)},
+    }
 
 
-estimator_parameters = ParameterSet(
-    # Параметр уровня, обращаться по ключу "Level", начальное значение 0, не является сенсором, так как для контроллера это входное значение
-    Level=Parameter("Level", 0, min_value=0),
-    # Параметр границы переключения между контроллерами, обращаться по ключу "Controller_boundary", начальное значение 0
-    Controller_boundary=Parameter("Controller boundary", 5),
-    # Параметр качества контроллера с именем Controller_min, обращаться по ключу "Controller_min", начальное значение 0, выходное значение эстиматора => сенсор
-    Controller_min=Parameter("Controller min", 0, sensor=True),
-    # Параметр качества контроллера с именем Controller_max, обращаться по ключу "Controller_max", начальное значение 0, выходное значение эстиматора => сенсор
-    Controller_max=Parameter("Controller max", 0, sensor=True)
-)
+def get_estimator(logger, boundary) -> RangeEstimator:
+    return RangeEstimator(logger=logger,
+                          process_parameters=['Level'],
+                          controller_regions=controller_boundaries(boundary)
+                          )
+
