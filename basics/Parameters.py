@@ -39,6 +39,7 @@ class Parameter:
 
     previous_value_depth: Optional[int] = 2
     previous_values = None
+    Integral: Number = 0
 
     sensor_noise: Optional[Callable[[Number], Number]] = None  # Функция для добавления шума, ограничений и нелинейности измерения параметра
 
@@ -79,7 +80,7 @@ class Parameter:
         """
         read_sensor
         ---
-        Метод
+        Метод для считывания значения с учётом шума сенсора
         """
         if self.sensor_noise is None:
             return self.value
@@ -91,6 +92,64 @@ class Parameter:
 
     def __call__(self):
         return self.value
+
+    def compute_step_integral(self, dt: Number) -> None:
+        """
+        integral
+        ---
+        Численно рассчитывает интеграл параметра по накопленным предыдущим значениям (на 1 шаг назад)
+        методом трапеций с постоянным шагом dt.
+
+        Аргументы:
+            :param dt:  Number - шаг дискретизации по времени
+        """
+        if not isinstance(dt, Number):
+            raise TypeError("dt должен быть числом")
+        if dt <= 0:
+            raise ValueError("dt должен быть положительным")
+        if self.previous_values is None or self.previous_value_depth<1:
+            raise ValueError(f"Предыдущие значения {self.name} деактивированы, расчёт интеграла невозможен")
+        if len(self.previous_values) < 2:
+            raise RuntimeWarning(f"Недостаточно предыдущих значений параметра {self.name}, интеграл не обновлён")
+            return
+
+        values = list(self.previous_values)
+        self.Integral += (values[0] + values[1]) * dt / 2
+        return
+
+    def compute_multiple_step_integral(self, dt: Number, steps: int | None = None) -> None:
+        """
+        integral
+        ---
+        Численно рассчитывает интеграл параметра по накопленным предыдущим значениям (на 1 шаг назад)
+        методом трапеций с постоянным шагом dt.
+
+        Аргументы:
+            :param dt:  Number - шаг дискретизации по времени для всех шагов
+            :param steps: int | None = None - число шагов, для которых посчитать интеграл, если None, то для всех доступных шагов
+        """
+        if not isinstance(dt, Number):
+            raise TypeError("dt должен быть числом")
+        if dt <= 0:
+            raise ValueError("dt должен быть положительным")
+        if self.previous_values is None or self.previous_value_depth<1:
+            raise ValueError(f"Предыдущие значения {self.name} деактивированы, расчёт интеграла невозможен")
+        if len(self.previous_values) < 2:
+            raise RuntimeWarning(f"Недостаточно предыдущих значений параметра {self.name}, интеграл не обновлён")
+            self.Integral = 0
+            return
+        if steps is None:
+            steps = self.previous_value_depth
+
+        values = list(self.previous_values)
+        self.Integral = sum((values[i] + values[i + 1]) * dt / 2 for i in range(steps))
+        return
+
+    def get_integral(self) -> Number:
+        return self.Integral
+
+    def zero_integral(self):
+        self.Integral = 0
 
 
 class DerivedParameter(Parameter):
@@ -292,8 +351,8 @@ class ParameterSet:
         Метод выгрузки всех или части значений в виде словаря dict[str, Number]
 
         Аргументы:
-            keys: list[str] = None      - Массив ключей при необходимости ограничивает выгружаемые параметры
-            read_sensors: bool = False  - Нужно ли применять шум сенсоров при считывании данных
+            :param keys: list[str] = None      - Массив ключей при необходимости ограничивает выгружаемые параметры
+            :param read_sensors: bool = False  - Нужно ли применять шум сенсоров при считывании данных
         """
         if read_sensors: # Если нужно считывать данные с сенсоров, то берём в учёт шум сенсоров
             if keys is None:
@@ -313,7 +372,7 @@ class ParameterSet:
         Метод загрузки всех или части значений в виде словаря dict[str, Number]
 
         Аргументы:
-            d: dict[str, Number]      - Словарь с необходимыми именами и значениями для записи
+            :param d: dict[str, Number]      - Словарь с необходимыми именами и значениями для записи
         """
         for key, value in data.items():
             if key not in self._params:
@@ -322,6 +381,54 @@ class ParameterSet:
 
     def __repr__(self):
         return ", ".join(f"{k}={p.value}" for k, p in self._params.items() if p.value is not None)
+
+    def compute_step_integral(self, dt: Number, keys: list[str] = None) -> None:
+        """
+        integral
+        ---
+        Численно рассчитывает интеграл параметра по накопленным предыдущим значениям (на 1 шаг назад)
+        методом трапеций с постоянным шагом dt. Для заданных параметров из набора
+
+        Аргументы:
+            :param dt:  Number - шаг дискретизации по времени для всех параметров
+            :param keys:  list[str] = None - ключи параметров, для которых надо посчитать интеграл, если None, то для всех
+        """
+        if keys is None:
+            keys = self._params.keys()
+
+        for key in keys:
+            self._params[key].compute_step_integral(dt=dt)
+
+    def compute_multiple_step_integral(self, dt: Number, steps: int | None = None, keys: list[str] = None) -> None:
+        """
+        integral
+        ---
+        Численно рассчитывает интеграл параметра по накопленным предыдущим значениям (на 1 шаг назад)
+        методом трапеций с постоянным шагом dt.
+
+        Аргументы:
+            :param dt:  Number - шаг дискретизации по времени для всех шагов
+            :param steps: int | None = None - число шагов, для которых посчитать интеграл, если None, то для всех доступных шагов
+            :param keys:  list[str] = None - ключи параметров, для которых надо посчитать интеграл, если None, то для всех
+        """
+        if keys is None:
+            keys = self._params.keys()
+
+        for key in keys:
+            self._params[key].compute_multiple_step_integral(dt=dt, steps=steps)
+
+    def get_integral(self, keys: list[str] = None) -> dict[str, Number]:
+        if keys is None:
+            keys = self._params.keys()
+
+        return {key: self._params[key].Integral for key in keys}
+
+    def zero_integral(self, keys: list[str] = None):
+        if keys is None:
+            keys = self._params.keys()
+
+        for key in keys:
+            self._params[key].zero_integral()
 
 
 if __name__ == '__main__':
