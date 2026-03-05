@@ -7,8 +7,9 @@ import random
 # Функция для получения словаря с границами контроллеров
 def controller_boundaries(boundary):
     return {
-        "Controller_min": {"Level": (None, boundary)},
-        "Controller_max": {"Level": (boundary, None)},
+        "Controller_min": {"Level": (None, -boundary)},
+        "Controller_middle": {"Level": (-boundary, boundary)},
+        "Controller_max": {"Level": (boundary, None)}
     }
 
 

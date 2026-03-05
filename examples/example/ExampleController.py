@@ -5,26 +5,15 @@ import random
 
 class Controller(FunctionalBlock):
     def compute(self, tick_duration: Number = None) -> None:
-        level = self.parameters["Level"]
-        if level <= self.parameters["Level_boundary"]:
-            if self.parameters["Strength"] > 0:
-                self.parameters['Level_control'] = self.parameters['Strength']
-            else:
-                self.parameters['Level_control'] = 0
-        else:
-            if self.parameters["Strength"] < 0:
-                self.parameters['Level_control'] = self.parameters['Strength']
-            else:
-                self.parameters['Level_control'] = 0
+        # Управляющиее воздействие от контроллера вычисляется как сила*текущий уровень
+        self.parameters['Level_control'] = self.parameters['Strength'] * self.parameters["Level"]
 
 
 controller_parameters = ParameterSet(
     # Параметр уровня, обращаться по ключу "Level", начальное значение 0, не является сенсором, так как для контроллера это входное значение
-    Level=Parameter("Level", 0, min_value=0),
-    # Параметр - граница включения управления, обращаться по ключу "Level_boundary", начальное значение 0
-    Level_boundary=Parameter("Level boundary", 0, min_value=0),
-    # Параметр управляемого изменения уровня, обращаться по ключу "Level_delta", начальное значение 0, управляющее воздействие, выходное значение контроллера => сенсор
-    Level_control=Parameter("Level control", 0, sensor=True),
+    Level=Parameter("Level", 0),
     # Параметр силы управления, обращаться по ключу "Strength", начальное значение 0, для настройки управляющего воздействия
-    Strength=Parameter("Strength", 0)
+    Strength=Parameter("Strength", 0.75),
+    # управляющее воздействие данного контроллера, так как выходное значение отмечаем сенсор
+    Level_control=Parameter("Level control", 0, sensor=True),
 )
