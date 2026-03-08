@@ -12,21 +12,27 @@ class Historizer:
 
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.name = None
         self.dir = None
+        self.subfolder = None
         self.records: dict[str, pd.DataFrame] = {}
 
-    def create_folder(self, name):
+    def create_folder(self, name) -> None:
+        if self.subfolder is None:
+            return
+
         self.name = name
         # Базовая папка для записи истории
-        base_log_dir = "results"
+        base_log_dir = "results"+self.subfolder
         # Подпапка с текущей датой и временем запуска
         run_dir = f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")} Simulation for {self.name}'
         self.dir = os.path.join(base_log_dir, run_dir)
         os.makedirs(self.dir, exist_ok=True)
 
-    def record(self, timestamp: float, **kwargs: dict[str, Number | str]):
+    def record(self, timestamp: float, **kwargs: dict[str, Number | str]) -> None:
+        if self.subfolder is None:
+            return
         if self.name is None or self.dir is None:
             raise AttributeError('Не указан путь к папке для записи истории')
 
@@ -48,7 +54,9 @@ class Historizer:
             # Добавляем новую строку в таблицу
             self.records[table_name] = pd.concat([self.records[table_name], data_df], ignore_index=True)
 
-    def save_history(self):
+    def save_history(self) -> None:
+        if self.subfolder is None:
+            return
 
         for name, df in self.records.items():
             df.to_csv(f"{self.dir}/{name}.csv", index=False)

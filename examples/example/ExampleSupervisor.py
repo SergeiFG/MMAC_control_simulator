@@ -1,7 +1,8 @@
 from basics import Supervisor
+from modules.supervisors import OneEstimatorSupervisor
 
 
-class ExampleSupervisor(Supervisor):
+class ExampleSupervisor(OneEstimatorSupervisor):
 
     def chose_estimator(self) -> None:
         # Эстиматор только один, поэтому всегда используем первый

@@ -39,11 +39,28 @@ class FunctionalBlock:
         for key in self.parameters.as_dict().keys():
             if not isinstance(self.parameters[key], DerivedParameter):
                 self.variables.append(key)
-            if self.parameters[key].sensor is True:
+            if self.parameters.params_dict[key].sensor is True:
                 self.sensors.append(key)
 
         self.logger.debug(f"Сенсоры функционального блока {self.name}: {self.sensors}")
         self.logger.debug(f"Переменные функционального блока {self.name}: {self.variables}")
+
+    def update_params(self, new_params: ParameterSet):
+        """
+        Обновление параметров данного функционального блока
+        :param new_params: ParameterSet с новыми параметрами
+        :return:
+        """
+        self.parameters.update(**new_params.params_dict)
+
+        self.variables = []
+        self.sensors = []
+
+        for key in self.parameters.as_dict().keys():
+            if not isinstance(self.parameters[key], DerivedParameter):
+                self.variables.append(key)
+            if self.parameters.params_dict[key].sensor is True:
+                self.sensors.append(key)
 
     def compute(self, tick_duration:Number = None) -> None:
         """

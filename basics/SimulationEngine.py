@@ -21,6 +21,8 @@ class SimulationEngine:
                  historizer: Historizer = None,
                  tick_duration: float = 0.1,
                  logger: logging.Logger | None = None,
+                 logs_subfolder: str | None = 0,
+                 results_subfolder: str | None = 0,
                  *args,
                  **kwargs
                  ) -> None:
@@ -35,6 +37,8 @@ class SimulationEngine:
             historizer: object = None               - Хранилище данных
             tick_duration: float = 0.1              - Время одного шага симуляции
             logger: logging.Logger | None = None    - Логгер для дебага программы
+            logs_subfolder: str | None = "/"        - Папка для сохранения логов внутри папки logs. Если None, то логи не сохраняются
+            results_subfolder: str | None = "/",    - Папка для сохранения результатов внутри папки results. Если None, то результаты не сохраняются
         """
 
         self.name = name
@@ -44,9 +48,28 @@ class SimulationEngine:
             self.logger = logging.getLogger(__name__)
         else:
             self.logger = logger
-            self.set_logging(self.logger)
 
         self.logger.info(f"Инициализация симуляции {self.name}")
+
+        if logs_subfolder == 0:
+            self.logger.debug(f'Подпапка для сохранения логов не задана, будет использован путь logs/{self.name}')
+            logs_subfolder = f'/{self.name}'
+        elif logs_subfolder is not None:
+            self.logger.debug(f'Путь для сохранения логов logs/{logs_subfolder}')
+        else:
+            self.logger.info("Логи не будут сохранены в папку")
+        self.logs_subfolder = logs_subfolder
+
+        if results_subfolder == 0:
+            self.logger.debug(f'Подпапка для сохранения результатов не задана, будет использован путь results/{self.name}')
+            results_subfolder = f'/{self.name}'
+        elif results_subfolder is not None:
+            self.logger.debug(f'Путь для сохранения результатов results/{results_subfolder}')
+        else:
+            self.logger.info("Результаты не будут сохранены в папку")
+        self.results_subfolder = results_subfolder
+
+        self.set_logging(self.logger)
 
         if model is None:
             self.logger.error("Модель объекта управления не задана")
@@ -67,6 +90,7 @@ class SimulationEngine:
             raise AttributeError("Система сбора данных не задана")
         else:
             self.historizer = historizer
+            self.historizer.subfolder = results_subfolder
             self.logger.info("Система сбора данных инициализирована")
             self.historizer.create_folder(self.name)
             self.logger.debug(f"Создана папка хранения истории {self.historizer.dir}")
@@ -139,7 +163,7 @@ class SimulationEngine:
         self.logger.debug(f"Записываем историю для момента времени {self.time}")
         self.historizer.record(self.time, model_sensor_data=sensor_data, control_actions=control_actions,
                                model_state=model_state, control_system_state=control_system_state,
-                               **controllers_state, **estimators_state)
+                               **controllers_state, **estimators_state) # TODO: Основное время тратится на этот шаг, оптимизировать
 
         # Записываем управляющие воздействия в модель, делаем шаг симуляции
         self.logger.debug(f"Запускам шаг симуляции модели для момента времени {self.time}")
@@ -150,8 +174,12 @@ class SimulationEngine:
         self.time += self.tick_duration
 
     def set_logging(self, logger) -> None:
+        logger.setLevel(logging.DEBUG)
+        if self.logs_subfolder is None:
+            return
+
         # Базовая папка для логов
-        base_log_dir = "logs"
+        base_log_dir = "logs"+self.logs_subfolder
         # Подпапка с текущей датой и временем запуска
         run_dir = f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")} Simulation for {self.name}'
         self.dir = os.path.join(base_log_dir, run_dir)
@@ -178,11 +206,10 @@ class SimulationEngine:
 
         # Создаем логгер
         # logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
 
         # Добавляем обработчики
         logger.addHandler(file_handler)
         logger.addHandler(error_handler)
 
-        return None
+        return
 

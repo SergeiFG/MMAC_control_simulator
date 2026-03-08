@@ -2,6 +2,7 @@ import sympy as sp
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Union
 from numbers import Number
+from collections import deque
 
 
 @dataclass
@@ -36,6 +37,10 @@ class Parameter:
     max_value: Optional[float] = None
     dtype: Optional[type] = None  # тип данных (float, int, bool, str, np.ndarray)
 
+    previous_value_depth: Optional[int] = 2
+    previous_values = None
+    Integral: Number = 0
+
     sensor_noise: Optional[Callable[[Number], Number]] = None  # Функция для добавления шума, ограничений и нелинейности измерения параметра
 
     metadata: dict[str, Any] = field(default_factory=dict)  # произвольные метаданные
@@ -46,8 +51,15 @@ class Parameter:
         ---
         Метод для автоматического применения типа данных при изменении значения
         """
-        if name == "value" and self.dtype is not None:
-            value = self.dtype(value)
+        if name == "value":
+            if self.dtype is not None:
+                value = self.dtype(value)
+            if isinstance(value, Number):
+                if self.previous_values is None:
+                    self.previous_values = deque([], maxlen=self.previous_value_depth + 1)
+                self.previous_values.appendleft(value)
+        elif name == "previous_value_depth" and self.previous_values is not None:
+            self.previous_values = deque(list(self.previous_values), maxlen=self.previous_value_depth+1)
         super().__setattr__(name, value)
 
     def validate(self) -> None: # TODO: Подумать, может стоит разделить логику обрезания значения и невозможных значений
@@ -68,7 +80,7 @@ class Parameter:
         """
         read_sensor
         ---
-        Метод
+        Метод для считывания значения с учётом шума сенсора
         """
         if self.sensor_noise is None:
             return self.value
@@ -78,8 +90,66 @@ class Parameter:
     def __str__(self):
         return f"{self.name} = {self.value} {self.units}"
 
-    def __repr__(self):
-        return f"{self.name}={self.value}"
+    def __call__(self):
+        return self.value
+
+    def compute_step_integral(self, dt: Number) -> None:
+        """
+        integral
+        ---
+        Численно рассчитывает интеграл параметра по накопленным предыдущим значениям (на 1 шаг назад)
+        методом трапеций с постоянным шагом dt.
+
+        Аргументы:
+            :param dt:  Number - шаг дискретизации по времени
+        """
+        if not isinstance(dt, Number):
+            raise TypeError("dt должен быть числом")
+        if dt <= 0:
+            raise ValueError("dt должен быть положительным")
+        if self.previous_values is None or self.previous_value_depth<1:
+            raise ValueError(f"Предыдущие значения {self.name} деактивированы, расчёт интеграла невозможен")
+        if len(self.previous_values) < 2:
+            raise RuntimeWarning(f"Недостаточно предыдущих значений параметра {self.name}, интеграл не обновлён")
+            return
+
+        values = list(self.previous_values)
+        self.Integral += (values[0] + values[1]) * dt / 2
+        return
+
+    def compute_multiple_step_integral(self, dt: Number, steps: int | None = None) -> None:
+        """
+        integral
+        ---
+        Численно рассчитывает интеграл параметра по накопленным предыдущим значениям (на 1 шаг назад)
+        методом трапеций с постоянным шагом dt.
+
+        Аргументы:
+            :param dt:  Number - шаг дискретизации по времени для всех шагов
+            :param steps: int | None = None - число шагов, для которых посчитать интеграл, если None, то для всех доступных шагов
+        """
+        if not isinstance(dt, Number):
+            raise TypeError("dt должен быть числом")
+        if dt <= 0:
+            raise ValueError("dt должен быть положительным")
+        if self.previous_values is None or self.previous_value_depth<1:
+            raise ValueError(f"Предыдущие значения {self.name} деактивированы, расчёт интеграла невозможен")
+        if len(self.previous_values) < 2:
+            raise RuntimeWarning(f"Недостаточно предыдущих значений параметра {self.name}, интеграл не обновлён")
+            self.Integral = 0
+            return
+        if steps is None:
+            steps = self.previous_value_depth
+
+        values = list(self.previous_values)
+        self.Integral = sum((values[i] + values[i + 1]) * dt / 2 for i in range(steps))
+        return
+
+    def get_integral(self) -> Number:
+        return self.Integral
+
+    def zero_integral(self):
+        self.Integral = 0
 
 
 class DerivedParameter(Parameter):
@@ -106,7 +176,7 @@ class DerivedParameter(Parameter):
     self._symbolic_expr                                     - Символьное выражение для вычисляемого параметра
 
     """
-    def __init__(self, name: str, formula: Callable[[Any], Number], dependencies: list[str], **kwargs):
+    def __init__(self, name: str, formula: Callable[[Any], Number], dependencies: list[str], **kwargs) -> None:
         """
         __init__
         ---
@@ -119,7 +189,7 @@ class DerivedParameter(Parameter):
         self.dependencies = dependencies
         self._symbolic_expr = None  # символьное выражение будет создано позже
 
-    def build_symbolic(self):
+    def build_symbolic(self) -> None:
         """Создаёт символьное выражение из зависимости"""
         symbols = [sp.Symbol(dep) for dep in self.dependencies]
         expr = self.formula_func(*symbols)
@@ -129,9 +199,9 @@ class DerivedParameter(Parameter):
             self._symbolic_expr = None
         return
 
-    def compute(self, parameters: "ParameterSet"):
+    def compute(self, parameters: "ParameterSet") -> Number:
         """Численный расчёт значения"""
-        values = [parameters[d].value for d in self.dependencies]
+        values = [parameters[d] for d in self.dependencies]
         self.value = self.formula_func(*values)
         return self.value
 
@@ -147,7 +217,7 @@ class ParameterSet:
     Класс для связи и управления набором параметров
 
     """
-    def __init__(self, **params: Parameter | DerivedParameter):
+    def __init__(self, **params: Parameter | DerivedParameter) -> None:
         """
         __init__
         ---
@@ -159,12 +229,13 @@ class ParameterSet:
             **params: Parameter     - Набор именованных параметров (класс Parameter или DerivedParameter)
         """
         self._params = params
+        self.params_dict = params # TODO: может есть более оптимальный вариант
 
         self._build_dependency_graph()
         self._check_for_cycles()
         self.order = self._topological_sort()
         self.update_derived()
-        self._build_symbolic_expressions() # TODO: понять, нужно ли, может ломать некоторые функции
+        self._build_symbolic_expressions() # Пока при ошибке ничего не делаем
 
         # Перенесено в self.update_derived()
         # for key in self._params: # При вводе значений проверим, что все числа корректные
@@ -252,8 +323,8 @@ class ParameterSet:
             if isinstance(p, DerivedParameter):
                 p.build_symbolic()
 
-    def __getitem__(self, key) -> Parameter:
-        return self._params[key]
+    def __getitem__(self, key) -> Number:
+        return self._params[key].value
 
     def __setitem__(self, key, value) -> None:
         """Проверка данных при изменении любого из параметов"""
@@ -267,6 +338,12 @@ class ParameterSet:
         # Убрал автоматическое обновление, чтобы постоянно не пересчитывать, пока все параметры не заданы
         # self.update_derived()
 
+    def update(self, **additional_parameters: Parameter | DerivedParameter) -> None:
+        for new_param in additional_parameters:
+            self._params[new_param] = additional_parameters[new_param]
+            self.params_dict[new_param] = additional_parameters[new_param]
+
+
     def as_dict(self, keys: list[str] = None, read_sensors: bool = False) -> dict[str, Number]:
         """
         as_dict
@@ -274,8 +351,8 @@ class ParameterSet:
         Метод выгрузки всех или части значений в виде словаря dict[str, Number]
 
         Аргументы:
-            keys: list[str] = None      - Массив ключей при необходимости ограничивает выгружаемые параметры
-            read_sensors: bool = False  - Нужно ли применять шум сенсоров при считывании данных
+            :param keys: list[str] = None      - Массив ключей при необходимости ограничивает выгружаемые параметры
+            :param read_sensors: bool = False  - Нужно ли применять шум сенсоров при считывании данных
         """
         if read_sensors: # Если нужно считывать данные с сенсоров, то берём в учёт шум сенсоров
             if keys is None:
@@ -295,7 +372,7 @@ class ParameterSet:
         Метод загрузки всех или части значений в виде словаря dict[str, Number]
 
         Аргументы:
-            d: dict[str, Number]      - Словарь с необходимыми именами и значениями для записи
+            :param d: dict[str, Number]      - Словарь с необходимыми именами и значениями для записи
         """
         for key, value in data.items():
             if key not in self._params:
@@ -305,33 +382,87 @@ class ParameterSet:
     def __repr__(self):
         return ", ".join(f"{k}={p.value}" for k, p in self._params.items() if p.value is not None)
 
+    def compute_step_integral(self, dt: Number, keys: list[str] = None) -> None:
+        """
+        integral
+        ---
+        Численно рассчитывает интеграл параметра по накопленным предыдущим значениям (на 1 шаг назад)
+        методом трапеций с постоянным шагом dt. Для заданных параметров из набора
+
+        Аргументы:
+            :param dt:  Number - шаг дискретизации по времени для всех параметров
+            :param keys:  list[str] = None - ключи параметров, для которых надо посчитать интеграл, если None, то для всех
+        """
+        if keys is None:
+            keys = self._params.keys()
+
+        for key in keys:
+            self._params[key].compute_step_integral(dt=dt)
+
+    def compute_multiple_step_integral(self, dt: Number, steps: int | None = None, keys: list[str] = None) -> None:
+        """
+        integral
+        ---
+        Численно рассчитывает интеграл параметра по накопленным предыдущим значениям (на 1 шаг назад)
+        методом трапеций с постоянным шагом dt.
+
+        Аргументы:
+            :param dt:  Number - шаг дискретизации по времени для всех шагов
+            :param steps: int | None = None - число шагов, для которых посчитать интеграл, если None, то для всех доступных шагов
+            :param keys:  list[str] = None - ключи параметров, для которых надо посчитать интеграл, если None, то для всех
+        """
+        if keys is None:
+            keys = self._params.keys()
+
+        for key in keys:
+            self._params[key].compute_multiple_step_integral(dt=dt, steps=steps)
+
+    def get_integral(self, keys: list[str] = None) -> dict[str, Number]:
+        if keys is None:
+            keys = self._params.keys()
+
+        return {key: self._params[key].Integral for key in keys}
+
+    def zero_integral(self, keys: list[str] = None):
+        if keys is None:
+            keys = self._params.keys()
+
+        for key in keys:
+            self._params[key].zero_integral()
+
 
 if __name__ == '__main__':
-    class Model:
-        def __init__(self):
-            self.parameters = ParameterSet(
-                x1 = Parameter("x1", 4, sensor=True, max_value=5),
-                x2 = Parameter("x2", 5, sensor=True),
-                y1 = DerivedParameter("y1", lambda x1, x2: x1**2+x2, ["x1","x2"], units='m2'),
-                y2=DerivedParameter("y2", lambda x: x*2, ["y3"]),
-                y3 = DerivedParameter("y3", lambda x: x * 2, ["y1"], sensor=True, sensor_noise=lambda x:x+1)
-                )
+    parameters = ParameterSet(
+        x1=Parameter("x1", 4, sensor=True, max_value=5),
+        x2=Parameter("x2", 5, sensor=True),
+        y1=DerivedParameter("y1", lambda x1, x2: x1 ** 2 + x2, ["x1", "x2"], units='m2', previous_value_depth=100),
+        y2=DerivedParameter("y2", lambda x: x * 2, ["y3"], sensor=False),
+        y3=DerivedParameter("y3", lambda x: x * 2, ["y1"], sensor=True, sensor_noise=lambda x: x + 1)
+    )
 
+    print(parameters)
+    print(str(parameters["x1"]))
+    print(str(parameters.as_dict(["x1", "y1"])))
+    print(parameters.params_dict["x1"].sensor)
+    print(parameters["y1"])
+    parameters["x1"] = 1
+    print(parameters)
+    parameters.update_derived()
+    print(parameters)
+    print(parameters.as_dict(read_sensors=True))
+    print(parameters.params_dict["x1"].previous_values)
+    print(parameters.params_dict["y1"].previous_values)
+    print(parameters.params_dict["y1"].previous_values[1])
 
-    model = Model()
-    # print(model.parameters)
-    # model.parameters["y1"] = 2
-    print(model.parameters.as_dict(['x2', 'y1']))
-    print(model.parameters.as_dict())
+    new_params = {'x5': Parameter("x5 new parameter", 18, sensor=True),
+                  'x1': Parameter("x1 new parameter", 558.35, sensor=False)}
 
-    a = {'x1': 2, 'x2': 3}
+    # можно любой из вариантов update
+    parameters.update(**new_params)
+    # parameters.update(x5=Parameter("x5 new parameter", 18, sensor=True),
+    #               x10=Parameter("x10 new parameter", 558.35, sensor=False))
 
-    model.parameters.load_dict(a)
-    model.parameters.update_derived()
-    print(model.parameters)
-    print(model.parameters.as_dict(['y3'], read_sensors=True))
+    print(parameters)
+    print(parameters.as_dict(read_sensors=True))
+    print(parameters._params['x1'].sensor)
 
-    print(model.parameters.as_dict().keys())
-
-    b = model.parameters['x1']
-    print(b)
